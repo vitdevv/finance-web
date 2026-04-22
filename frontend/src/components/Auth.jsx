@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { api } from '../api'
+import { useLang } from '../LangContext'
 
 export default function Auth({ onLogin }) {
+  const { t, lang, toggleLang } = useLang()
   const [tab, setTab] = useState('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -26,12 +28,12 @@ export default function Auth({ onLogin }) {
   async function handleRegister(e) {
     e.preventDefault()
     setError(''); setSuccess('')
-    if (!username || !password) return setError('Fill all fields.')
-    if (password !== confirm) return setError('Passwords do not match.')
+    if (!username || !password) return setError(t('fillAllFields'))
+    if (password !== confirm) return setError(t('passwordsMismatch'))
     setLoading(true)
     try {
       await api.register(username, password)
-      setSuccess('Account created! You can now log in.')
+      setSuccess(t('accountCreated'))
       setTab('login')
       setPassword(''); setConfirm('')
     } catch (err) {
@@ -44,8 +46,14 @@ export default function Auth({ onLogin }) {
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
+        <div className="flex justify-end mb-3">
+          <button onClick={toggleLang} className="btn-secondary text-xs px-3 py-1">
+            {lang === 'en' ? 'PT' : 'EN'}
+          </button>
+        </div>
+
         <h1 className="text-3xl font-bold text-center mb-1 text-white">Finance PRO</h1>
-        <p className="text-gray-400 text-center text-sm mb-6">Brazilian freelancer tax dashboard</p>
+        <p className="text-gray-400 text-center text-sm mb-6">{t('tagline')}</p>
 
         <div className="card">
           <div className="flex rounded-lg overflow-hidden mb-5 bg-gray-800">
@@ -53,39 +61,39 @@ export default function Auth({ onLogin }) {
               className={`flex-1 py-2 text-sm font-medium transition-colors ${tab === 'login' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
               onClick={() => { setTab('login'); setError(''); setSuccess('') }}
             >
-              Sign In
+              {t('signIn')}
             </button>
             <button
               className={`flex-1 py-2 text-sm font-medium transition-colors ${tab === 'register' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
               onClick={() => { setTab('register'); setError(''); setSuccess('') }}
             >
-              Create Account
+              {t('createAccount')}
             </button>
           </div>
 
           {tab === 'login' ? (
             <form onSubmit={handleLogin} className="space-y-3">
-              <input className="w-full" placeholder="Username" value={username}
+              <input className="w-full" placeholder={t('username')} value={username}
                 onChange={e => setUsername(e.target.value)} autoFocus />
-              <input className="w-full" type="password" placeholder="Password" value={password}
+              <input className="w-full" type="password" placeholder={t('password')} value={password}
                 onChange={e => setPassword(e.target.value)} />
               {error && <p className="text-red-400 text-sm">{error}</p>}
               {success && <p className="text-green-400 text-sm">{success}</p>}
               <button type="submit" className="btn-primary w-full" disabled={loading}>
-                {loading ? 'Signing in…' : 'Sign In'}
+                {loading ? t('signingIn') : t('signIn')}
               </button>
             </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-3">
-              <input className="w-full" placeholder="Username" value={username}
+              <input className="w-full" placeholder={t('username')} value={username}
                 onChange={e => setUsername(e.target.value)} autoFocus />
-              <input className="w-full" type="password" placeholder="Password" value={password}
+              <input className="w-full" type="password" placeholder={t('password')} value={password}
                 onChange={e => setPassword(e.target.value)} />
-              <input className="w-full" type="password" placeholder="Confirm Password" value={confirm}
+              <input className="w-full" type="password" placeholder={t('confirmPassword')} value={confirm}
                 onChange={e => setConfirm(e.target.value)} />
               {error && <p className="text-red-400 text-sm">{error}</p>}
               <button type="submit" className="btn-primary w-full" disabled={loading}>
-                {loading ? 'Creating…' : 'Create Account'}
+                {loading ? t('creating') : t('createAccount')}
               </button>
             </form>
           )}

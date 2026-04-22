@@ -92,7 +92,7 @@ def calc_taxes(usd_received, usd_rate, brl_extra, prolabore, mode):
     if mode == "PF":
         return dict(regime="PF", receita_usd=receita_usd, receita_total=receita_total,
                     prolabore=0, das=0, inss=0, irpf=0, net_profit=receita_total)
-    pro = prolabore
+    pro = receita_total * 0.30
     fator_r = pro / receita_total if receita_total else 0
     aliquota, regime = (0.06, "Anexo III") if fator_r >= 0.28 else (0.155, "Anexo V")
     das = receita_total * aliquota

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api'
+import { useLang } from '../LangContext'
 
 const TYPES = ['Savings', 'Investment', 'Expense', 'Asset']
 const CURRENCIES = ['BRL', 'USD', 'AUD']
@@ -14,12 +15,13 @@ const TYPE_COLORS = {
 }
 
 export default function Assets({ assets, onRefresh, notify }) {
+  const { t } = useLang()
   const [type, setType] = useState('')
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('BRL')
   const [rate, setRate] = useState(1.0)
-  const [rateLabel, setRateLabel] = useState('Rate: 1.0')
+  const [rateLabel, setRateLabel] = useState('')
   const [rateColor, setRateColor] = useState('text-gray-400')
   const [editId, setEditId] = useState(null)
   const [editData, setEditData] = useState({})
@@ -27,10 +29,10 @@ export default function Assets({ assets, onRefresh, notify }) {
   async function selectCurrency(cur) {
     setCurrency(cur)
     if (cur === 'BRL') {
-      setRate(1.0); setRateLabel('Rate: 1.0'); setRateColor('text-gray-400')
+      setRate(1.0); setRateLabel(t('rateDefault')); setRateColor('text-gray-400')
       return
     }
-    setRateLabel(`Fetching ${cur}→BRL…`); setRateColor('text-yellow-400')
+    setRateLabel(t('fetchingRate', { cur })); setRateColor('text-yellow-400')
     try {
       const data = await api.getRate(cur)
       setRate(data.rate)
@@ -38,33 +40,33 @@ export default function Assets({ assets, onRefresh, notify }) {
       setRateColor('text-green-400')
     } catch {
       setRate(0)
-      setRateLabel('Could not fetch rate')
+      setRateLabel(t('rateFetchError'))
       setRateColor('text-red-400')
     }
   }
 
   async function handleAdd(e) {
     e.preventDefault()
-    if (!type || !name) return notify('Fill type and name.', true)
-    if (!rate && currency !== 'BRL') return notify('Could not get rate. Reselect currency.', true)
+    if (!type || !name) return notify(t('fillTypeAndName'), true)
+    if (!rate && currency !== 'BRL') return notify(t('noRateError'), true)
     const origAmt = parseFloat(amount) || 0
     const brlAmt = Math.round(origAmt * rate * 100) / 100
     try {
       await api.addAsset({ type, name, orig_amount: origAmt, orig_currency: currency, rate_used: rate, amount: brlAmt })
       setName(''); setAmount('')
       onRefresh()
-      notify(`Saved: ${currency} ${origAmt.toFixed(2)} → ${fmt(brlAmt)}`)
+      notify(t('assetSaved', { currency, amount: origAmt.toFixed(2), brl: fmt(brlAmt) }))
     } catch (err) {
       notify(err.message, true)
     }
   }
 
   async function handleDelete(id) {
-    if (!confirm('Delete this asset?')) return
+    if (!confirm(t('deleteAssetConfirm'))) return
     try {
       await api.deleteAsset(id)
       onRefresh()
-      notify('Deleted.')
+      notify(t('deleted'))
     } catch (err) {
       notify(err.message, true)
     }
@@ -74,7 +76,7 @@ export default function Assets({ assets, onRefresh, notify }) {
     try {
       const data = await api.refreshAssetRate(asset.id)
       onRefresh()
-      notify(`Rate updated: 1 ${asset.orig_currency} = R$ ${data.rate.toFixed(4)}`)
+      notify(t('rateUpdated', { currency: asset.orig_currency, rate: data.rate.toFixed(4) }))
     } catch (err) {
       notify(err.message, true)
     }
@@ -92,7 +94,7 @@ export default function Assets({ assets, onRefresh, notify }) {
       await api.editAsset(editId, { name: editData.name, orig_amount: origAmt, rate_used: editData.rate_used, amount: brlAmt })
       setEditId(null)
       onRefresh()
-      notify('Asset updated!')
+      notify(t('assetUpdated'))
     } catch (err) {
       notify(err.message, true)
     }
@@ -103,23 +105,23 @@ export default function Assets({ assets, onRefresh, notify }) {
 
   return (
     <div className="card">
-      <h2 className="section-title">Assets & Expenses (current month)</h2>
+      <h2 className="section-title">{t('assetsTitle')}</h2>
 
       {/* Add form */}
       <form onSubmit={handleAdd} className="mb-4">
         <div className="flex flex-wrap gap-3 mb-3">
           <select className="w-36" value={type} onChange={e => setType(e.target.value)}>
-            <option value="">Type…</option>
-            {TYPES.map(t => <option key={t}>{t}</option>)}
+            <option value="">{t('typePlaceholder')}</option>
+            {TYPES.map(tp => <option key={tp} value={tp}>{t(`type${tp}`)}</option>)}
           </select>
-          <input className="w-44" placeholder="Name" value={name} onChange={e => setName(e.target.value)} />
-          <input className="w-32" placeholder="Amount" value={amount} onChange={e => setAmount(e.target.value)} />
-          <button type="submit" className="btn-primary">Add</button>
+          <input className="w-44" placeholder={t('name')} value={name} onChange={e => setName(e.target.value)} />
+          <input className="w-32" placeholder={t('amount')} value={amount} onChange={e => setAmount(e.target.value)} />
+          <button type="submit" className="btn-primary">{t('add')}</button>
         </div>
 
         {/* Currency picker */}
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-xs text-gray-400">Currency:</span>
+          <span className="text-xs text-gray-400">{t('currencyLabel')}</span>
           {CURRENCIES.map(cur => (
             <button
               key={cur}
@@ -131,21 +133,21 @@ export default function Assets({ assets, onRefresh, notify }) {
               {cur}
             </button>
           ))}
-          <span className={`text-xs ${rateColor}`}>{rateLabel}</span>
+          {rateLabel && <span className={`text-xs ${rateColor}`}>{rateLabel}</span>}
         </div>
       </form>
 
       {/* Assets table */}
       {assets.length === 0 ? (
-        <p className="text-gray-500 text-sm">No assets or expenses for this month.</p>
+        <p className="text-gray-500 text-sm">{t('noAssets')}</p>
       ) : (
         <>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px]">
               <thead>
                 <tr>
-                  {['Type', 'Name', 'Original', 'BRL', 'Date', ''].map(h => (
-                    <th key={h} className="table-th">{h}</th>
+                  {[t('typeCol'), t('name'), t('originalCol'), t('brlCol'), t('date'), ''].map((h, i) => (
+                    <th key={i} className="table-th">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -153,7 +155,9 @@ export default function Assets({ assets, onRefresh, notify }) {
                 {assets.map(a => (
                   <tr key={a.id} className="hover:bg-gray-800/50">
                     <td className="table-td">
-                      <span className={`badge ${TYPE_COLORS[a.type] || 'bg-gray-700 text-gray-300'}`}>{a.type}</span>
+                      <span className={`badge ${TYPE_COLORS[a.type] || 'bg-gray-700 text-gray-300'}`}>
+                        {t(`type${a.type}`) || a.type}
+                      </span>
                     </td>
                     <td className="table-td text-gray-200">{a.name}</td>
                     <td className="table-td font-mono text-right text-gray-300">
@@ -165,21 +169,22 @@ export default function Assets({ assets, onRefresh, notify }) {
                     <td className="table-td text-gray-400 whitespace-nowrap">{a.created_at.slice(0, 10)}</td>
                     <td className="table-td">
                       <div className="flex gap-1 justify-end">
-                        <button onClick={() => openEdit(a)} className="text-blue-400 hover:text-blue-300 p-1" title="Edit">
+                        <button onClick={() => openEdit(a)} className="text-blue-400 hover:text-blue-300 p-1">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                               d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
                         {a.orig_currency !== 'BRL' && (
-                          <button onClick={() => handleRefreshRate(a)} className="text-orange-400 hover:text-orange-300 p-1" title={`Refresh ${a.orig_currency}→BRL`}>
+                          <button onClick={() => handleRefreshRate(a)} className="text-orange-400 hover:text-orange-300 p-1"
+                            title={`Refresh ${a.orig_currency}→BRL`}>
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
                           </button>
                         )}
-                        <button onClick={() => handleDelete(a.id)} className="text-red-400 hover:text-red-300 p-1" title="Delete">
+                        <button onClick={() => handleDelete(a.id)} className="text-red-400 hover:text-red-300 p-1">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                               d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -192,7 +197,7 @@ export default function Assets({ assets, onRefresh, notify }) {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-gray-700">
-                  <td colSpan={3} className="table-td font-semibold text-gray-300">Total deductions</td>
+                  <td colSpan={3} className="table-td font-semibold text-gray-300">{t('totalDeductions')}</td>
                   <td className="table-td font-mono text-right font-bold text-yellow-300">{fmt(total)}</td>
                   <td colSpan={2} />
                 </tr>
@@ -206,16 +211,16 @@ export default function Assets({ assets, onRefresh, notify }) {
       {editId && editAsset && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-40 p-4">
           <div className="bg-gray-900 rounded-xl p-6 w-full max-w-sm border border-gray-700 shadow-2xl">
-            <h3 className="text-base font-semibold mb-4">Edit {editAsset.name}</h3>
+            <h3 className="text-base font-semibold mb-4">{t('editAssetTitle', { name: editAsset.name })}</h3>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-gray-400 block mb-1">Name</label>
+                <label className="text-xs text-gray-400 block mb-1">{t('name')}</label>
                 <input className="w-full" value={editData.name}
                   onChange={e => setEditData(d => ({ ...d, name: e.target.value }))} />
               </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-1">
-                  Amount ({editAsset.orig_currency})
+                  {t('amountField', { currency: editAsset.orig_currency })}
                 </label>
                 <input className="w-full" value={editData.orig_amount}
                   onChange={e => setEditData(d => ({ ...d, orig_amount: e.target.value }))} />
@@ -228,8 +233,8 @@ export default function Assets({ assets, onRefresh, notify }) {
               )}
             </div>
             <div className="flex gap-2 mt-5 justify-end">
-              <button onClick={() => setEditId(null)} className="btn-secondary">Cancel</button>
-              <button onClick={handleSaveEdit} className="btn-primary">Save</button>
+              <button onClick={() => setEditId(null)} className="btn-secondary">{t('cancel')}</button>
+              <button onClick={handleSaveEdit} className="btn-primary">{t('save')}</button>
             </div>
           </div>
         </div>

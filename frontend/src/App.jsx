@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import Auth from './components/Auth'
 import Dashboard from './components/Dashboard'
+import { LangProvider } from './LangContext'
 
 export default function App() {
   const [auth, setAuth] = useState(null)
@@ -23,6 +24,11 @@ export default function App() {
     setAuth(null)
   }
 
-  if (!auth) return <Auth onLogin={handleLogin} />
-  return <Dashboard username={auth.username} onLogout={handleLogout} />
+  return (
+    <LangProvider>
+      {!auth
+        ? <Auth onLogin={handleLogin} />
+        : <Dashboard username={auth.username} onLogout={handleLogout} />}
+    </LangProvider>
+  )
 }
