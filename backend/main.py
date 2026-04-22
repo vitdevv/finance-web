@@ -12,7 +12,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 SECRET = os.environ.get("JWT_SECRET", "finance_secret_key_change_in_production")
-DB_PATH = os.environ.get("DB_PATH", os.path.join(os.path.dirname(os.path.abspath(__file__)), "finance.db"))
+DB_PATH = os.environ.get("DB_PATH", os.path.join(tempfile.gettempdir(), "finance.db"))
 ALGORITHM = "HS256"
 
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
