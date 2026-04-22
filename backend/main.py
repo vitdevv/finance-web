@@ -11,14 +11,17 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-SECRET = "finance_secret_key_change_in_production"
-DB_PATH = os.path.join(os.path.dirname(__file__), "finance.db")
+SECRET = os.environ.get("JWT_SECRET", "finance_secret_key_change_in_production")
+DB_PATH = os.environ.get("DB_PATH", "/tmp/finance.db")
 ALGORITHM = "HS256"
+
+_raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",")]
 
 app = FastAPI(title="Finance PRO API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
