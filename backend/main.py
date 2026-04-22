@@ -12,7 +12,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 SECRET = os.environ.get("JWT_SECRET", "finance_secret_key_change_in_production")
-DB_PATH = os.environ.get("DB_PATH", "/tmp/finance.db")
+DB_PATH = os.environ.get("DB_PATH", os.path.join(os.path.dirname(os.path.abspath(__file__)), "finance.db"))
 ALGORITHM = "HS256"
 
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
@@ -273,10 +273,23 @@ def refresh_asset_rate(aid: int, u=Depends(current_user)):
     if currency == "BRL":
         return {"rate": 1.0, "amount": orig_amt}
     try:
-        res = http_req.get(f"https://api.exchangerate-api.com/v4/latest/{currency}", timeout=5)
-        rate = round(res.json()["rates"]["BRL"], 4)
+        res = http_req.get(
+            f"https://economia.awesomeapi.com.br/json/last/{currency}-BRL",
+            timeout=5,
+        )
+        res.raise_for_status()
+        data = res.json()
+        rate = round(float(data[f"{currency}BRL"]["bid"]), 4)
     except Exception:
-        raise HTTPException(status_code=503, detail="Could not fetch exchange rate")
+        try:
+            res = http_req.get(
+                f"https://api.exchangerate-api.com/v4/latest/{currency}",
+                timeout=5,
+            )
+            res.raise_for_status()
+            rate = round(res.json()["rates"]["BRL"], 4)
+        except Exception:
+            raise HTTPException(status_code=503, detail="Could not fetch exchange rate")
     new_brl = round(orig_amt * rate, 2)
     with get_conn() as conn:
         conn.execute("""UPDATE assets SET rate_used=?, amount=?, created_at=?
@@ -290,8 +303,25 @@ def refresh_asset_rate(aid: int, u=Depends(current_user)):
 def get_rate(currency: str):
     if currency == "BRL":
         return {"rate": 1.0}
+    # Primary: AwesomeAPI commercial rate (same base NOMAD uses)
     try:
-        res = http_req.get(f"https://api.exchangerate-api.com/v4/latest/{currency}", timeout=5)
+        res = http_req.get(
+            f"https://economia.awesomeapi.com.br/json/last/{currency}-BRL",
+            timeout=5,
+        )
+        res.raise_for_status()
+        data = res.json()
+        rate = round(float(data[f"{currency}BRL"]["bid"]), 4)
+        return {"rate": rate}
+    except Exception:
+        pass
+    # Fallback: exchangerate-api
+    try:
+        res = http_req.get(
+            f"https://api.exchangerate-api.com/v4/latest/{currency}",
+            timeout=5,
+        )
+        res.raise_for_status()
         return {"rate": round(res.json()["rates"]["BRL"], 4)}
     except Exception:
         raise HTTPException(status_code=503, detail="Could not fetch exchange rate")

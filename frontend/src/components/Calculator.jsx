@@ -4,26 +4,86 @@ import { api } from '../api'
 const fmt = (n) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n)
 
+const CURRENCIES = ['BRL', 'USD', 'AUD']
+
+function CurrencyBox({ label, currency, setCurrency, amount, setAmount, rate, setRate, fetching, onGetRate }) {
+  const isBRL = currency === 'BRL'
+
+  return (
+    <div className="flex flex-col gap-2 p-3 bg-gray-800/40 rounded-lg border border-gray-700 min-w-[220px]">
+      <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">{label}</span>
+
+      <div className="flex gap-2">
+        <select
+          value={currency}
+          onChange={e => { setCurrency(e.target.value); setRate('') }}
+          className="w-20"
+        >
+          {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <input
+          className="flex-1 min-w-0"
+          placeholder="0.00"
+          value={amount}
+          onChange={e => setAmount(e.target.value)}
+        />
+      </div>
+
+      {!isBRL && (
+        <div className="flex gap-2 items-center">
+          <span className="text-xs text-gray-500 shrink-0">{currency}→BRL</span>
+          <input
+            className="w-24"
+            placeholder="rate"
+            value={rate}
+            onChange={e => setRate(e.target.value)}
+          />
+          <button
+            type="button"
+            onClick={onGetRate}
+            className="btn-secondary text-xs whitespace-nowrap py-1.5 px-3"
+            disabled={fetching}
+          >
+            {fetching ? '…' : 'Get Rate'}
+          </button>
+        </div>
+      )}
+
+      {!isBRL && amount && rate && (
+        <p className="text-xs text-green-400">
+          = {fmt((parseFloat(amount) || 0) * (parseFloat(rate) || 0))}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function Calculator({ onSaved, notify }) {
   const [mode, setMode] = useState('PJ')
-  const [usd, setUsd] = useState('')
-  const [rate, setRate] = useState('')
-  const [brl, setBrl] = useState('')
   const [prolabore, setProlabore] = useState('5500')
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [fetchingRate, setFetchingRate] = useState(false)
 
-  async function handleGetRate() {
-    setFetchingRate(true)
+  const [incomeCurrency, setIncomeCurrency] = useState('USD')
+  const [income, setIncome] = useState('')
+  const [incomeRate, setIncomeRate] = useState('')
+  const [fetchingIncomeRate, setFetchingIncomeRate] = useState(false)
+
+  const [bonusCurrency, setBonusCurrency] = useState('BRL')
+  const [bonus, setBonus] = useState('')
+  const [bonusRate, setBonusRate] = useState('')
+  const [fetchingBonusRate, setFetchingBonusRate] = useState(false)
+
+  async function fetchRate(currency, setRate, setFetching) {
+    setFetching(true)
     try {
-      const data = await api.getRate('USD')
+      const data = await api.getRate(currency)
       setRate(String(data.rate))
-      notify(`USD rate: R$ ${data.rate}`)
+      notify(`${currency} → BRL: R$ ${data.rate} (câmbio comercial)`)
     } catch {
       notify('Could not fetch rate. Enter manually.', true)
     } finally {
-      setFetchingRate(false)
+      setFetching(false)
     }
   }
 
@@ -31,14 +91,18 @@ export default function Calculator({ onSaved, notify }) {
     e.preventDefault()
     setLoading(true)
     try {
+      const incRate = incomeCurrency === 'BRL' ? 1.0 : parseFloat(incomeRate) || 0
+      const bonRate = bonusCurrency === 'BRL' ? 1.0 : parseFloat(bonusRate) || 0
+      const bonusBRL = (parseFloat(bonus) || 0) * bonRate
+
       const data = await api.calculate({
-        usd_received: parseFloat(usd) || 0,
-        usd_rate: parseFloat(rate) || 0,
-        brl_extra: parseFloat(brl) || 0,
+        usd_received: parseFloat(income) || 0,
+        usd_rate: incRate,
+        brl_extra: bonusBRL,
         prolabore: parseFloat(prolabore) || 0,
         mode,
       })
-      setResult(data)
+      setResult({ ...data, incomeCurrency, bonusCurrency })
       onSaved()
       notify('Calculated and saved!')
     } catch (err) {
@@ -48,13 +112,16 @@ export default function Calculator({ onSaved, notify }) {
     }
   }
 
-  const usdInBrl = (parseFloat(usd) || 0) * (parseFloat(rate) || 0)
+  const incomeEffectiveRate = incomeCurrency === 'BRL' ? 1 : parseFloat(incomeRate) || 0
+  const bonusEffectiveRate  = bonusCurrency  === 'BRL' ? 1 : parseFloat(bonusRate)  || 0
+  const incomeBRL = (parseFloat(income) || 0) * incomeEffectiveRate
+  const bonusBRL  = (parseFloat(bonus)  || 0) * bonusEffectiveRate
+  const totalBRL  = incomeBRL + bonusBRL
 
   return (
     <div className="card">
       <h2 className="section-title">Monthly Calculation</h2>
 
-      {/* Mode toggle */}
       <div className="flex gap-2 mb-4">
         {['PJ', 'PF'].map((m) => (
           <button
@@ -70,23 +137,28 @@ export default function Calculator({ onSaved, notify }) {
 
       <form onSubmit={handleCalculate}>
         <div className="flex flex-wrap gap-3 mb-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-400">USD Received</label>
-            <input className="w-36" placeholder="0.00" value={usd} onChange={e => setUsd(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-400">USD → BRL Rate</label>
-            <div className="flex gap-2">
-              <input className="w-28" placeholder="0.00" value={rate} onChange={e => setRate(e.target.value)} />
-              <button type="button" onClick={handleGetRate} className="btn-secondary whitespace-nowrap" disabled={fetchingRate}>
-                {fetchingRate ? '…' : 'Get Rate'}
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-400">BRL Extra</label>
-            <input className="w-36" placeholder="0.00" value={brl} onChange={e => setBrl(e.target.value)} />
-          </div>
+          <CurrencyBox
+            label="Income"
+            currency={incomeCurrency}
+            setCurrency={setIncomeCurrency}
+            amount={income}
+            setAmount={setIncome}
+            rate={incomeRate}
+            setRate={setIncomeRate}
+            fetching={fetchingIncomeRate}
+            onGetRate={() => fetchRate(incomeCurrency, setIncomeRate, setFetchingIncomeRate)}
+          />
+          <CurrencyBox
+            label="Bonus"
+            currency={bonusCurrency}
+            setCurrency={setBonusCurrency}
+            amount={bonus}
+            setAmount={setBonus}
+            rate={bonusRate}
+            setRate={setBonusRate}
+            fetching={fetchingBonusRate}
+            onGetRate={() => fetchRate(bonusCurrency, setBonusRate, setFetchingBonusRate)}
+          />
           {mode === 'PJ' && (
             <div className="flex flex-col gap-1">
               <label className="text-xs text-gray-400">Pro-Labore</label>
@@ -95,9 +167,13 @@ export default function Calculator({ onSaved, notify }) {
           )}
         </div>
 
-        {usdInBrl > 0 && (
+        {totalBRL > 0 && (
           <p className="text-xs text-gray-400 mb-3">
-            USD converted: {fmt(usdInBrl)} + BRL {fmt(parseFloat(brl) || 0)} = {fmt(usdInBrl + (parseFloat(brl) || 0))} total
+            {incomeCurrency !== 'BRL' && incomeRate
+              ? `${income} ${incomeCurrency} × ${incomeRate} = ${fmt(incomeBRL)}`
+              : `Income: ${fmt(incomeBRL)}`}
+            {bonusBRL > 0 && ` + Bonus: ${fmt(bonusBRL)}`}
+            {` = ${fmt(totalBRL)} total`}
           </p>
         )}
 
@@ -119,15 +195,20 @@ function ResultTable({ result, mode }) {
   const fmt = (n) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n)
 
+  const incomeLabel = result.incomeCurrency && result.incomeCurrency !== 'BRL'
+    ? `${result.incomeCurrency} Income`
+    : 'Income'
+  const bonusAmt = result.receita_total - result.receita_usd
+
   const rows = mode === 'PF'
     ? [
-        ['Income', 'USD Converted', result.receita_usd],
-        ['Income', 'BRL Extra', result.receita_total - result.receita_usd],
+        ['Income', incomeLabel, result.receita_usd],
+        ...(bonusAmt > 0.001 ? [['Income', 'Bonus', bonusAmt]] : []),
         ['Result', 'PF Total Revenue', result.net_profit],
       ]
     : [
-        ['Income', 'USD Converted', result.receita_usd],
-        ['Income', 'BRL Extra', result.receita_total - result.receita_usd],
+        ['Income', incomeLabel, result.receita_usd],
+        ...(bonusAmt > 0.001 ? [['Income', 'Bonus', bonusAmt]] : []),
         ['Tax', `DAS (${result.regime})`, -result.das],
         ['Tax', 'INSS', -result.inss],
         ['Tax', 'IRPF', -result.irpf],
